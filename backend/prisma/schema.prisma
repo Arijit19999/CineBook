@@ -1,0 +1,194 @@
+// CineBook — Prisma schema
+// 12 required entities from IMPLEMENTATION_PLAN.md §3.
+// SeatHold lives in Redis (TTL fit), so 11 models here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  customer
+  hall_manager
+  admin
+}
+
+enum AgeRating {
+  U
+  UA
+  A
+}
+
+enum MovieFormat {
+  TWO_D // 2D
+  THREE_D // 3D
+}
+
+enum ScreenType {
+  Standard
+  IMAX
+  FourDX // 4DX
+  DolbyAtmos
+}
+
+enum SeatCategory {
+  FrontRow
+  Standard
+  Premium
+  Recliner
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+}
+
+enum PaymentStatus {
+  success
+  failed
+  refunded
+}
+
+// ---------- Models ----------
+
+model User {
+  id               String    @id @default(cuid())
+  phone            String    @unique
+  name             String
+  role             Role      @default(customer)
+  assignedScreenIds String[] @default([]) // for hall_manager
+  preferences      Json? // free-form personalization (languages, genres, seat prefs)
+  bookings         Booking[]
+  activityLogs     AdminActivityLog[]
+  createdAt        DateTime  @default(now())
+}
+
+model Movie {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  runtimeMin  Int
+  cast        String[]    @default([])
+  posterUrl   String?
+  trailerUrl  String?
+  releaseDate DateTime
+  language    String
+  ageRating   AgeRating
+  format      MovieFormat @default(TWO_D)
+  genres      Genre[]     @relation("MovieGenres")
+  shows       Show[]
+  createdAt   DateTime    @default(now())
+}
+
+model Genre {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  movies Movie[] @relation("MovieGenres")
+}
+
+model Theatre {
+  id       String   @id @default(cuid())
+  chain    String // PVR / INOX / ...
+  location String // area, e.g. Koramangala
+  address  String
+  screens  Screen[]
+}
+
+model Screen {
+  id         String     @id @default(cuid())
+  theatreId  String
+  theatre    Theatre    @relation(fields: [theatreId], references: [id], onDelete: Cascade)
+  screenType ScreenType @default(Standard)
+  equipment  String[]   @default([])
+  capacity   Int
+  seats      Seat[]
+  shows      Show[]
+}
+
+model Seat {
+  id          String       @id @default(cuid())
+  screenId    String
+  screen      Screen       @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  row         String
+  number      Int
+  category    SeatCategory @default(Standard)
+  basePrice   Int // in paise/cents-free integer rupees for simplicity
+  bookedSeats BookedSeat[]
+
+  @@unique([screenId, row, number])
+}
+
+model Show {
+  id        String    @id @default(cuid())
+  movieId   String
+  movie     Movie     @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  screenId  String
+  screen    Screen    @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  startTime DateTime
+  endTime   DateTime // derived from runtime; overlap-checked
+  basePrice Int
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+
+  @@index([screenId, startTime])
+}
+
+model Booking {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  showId    String
+  show      Show          @relation(fields: [showId], references: [id])
+  status    BookingStatus @default(pending)
+  totalCost Int
+  seats     BookedSeat[]
+  payment   Payment?
+  createdAt DateTime      @default(now())
+
+  @@index([userId])
+}
+
+model BookedSeat {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seatId    String
+  seat      Seat    @relation(fields: [seatId], references: [id])
+  showId    String // denormalized so the unique backstop can span show+seat
+  pricePaid Int
+
+  @@unique([showId, seatId]) // double-book backstop
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  bookingId     String        @unique
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount        Int
+  status        PaymentStatus
+  transactionId String?
+  createdAt     DateTime      @default(now())
+}
+
+model AdminActivityLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  durationMs Int?
+  success    Boolean  @default(true)
+  source     String   @default("rest") // "rest" | "chatbot"
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}

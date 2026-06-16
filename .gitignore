@@ -1,0 +1,26 @@
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Env / secrets
+.env
+*.env
+!*.env.example
+
+# Prisma
+backend/prisma/migrations/dev.db*
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
