@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config.dart';
 import '../../shared/models/models.dart';
 import 'catalog_repository.dart';
 
@@ -12,15 +13,35 @@ class BrowseScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final movies = ref.watch(moviesProvider);
     final genres = ref.watch(genresProvider);
+    final languages = ref.watch(languagesProvider);
     final filter = ref.watch(movieFilterProvider);
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            decoration: const InputDecoration(hintText: 'Search movies', prefixIcon: Icon(Icons.search)),
-            onChanged: (v) => ref.read(movieFilterProvider.notifier).setQuery(v),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(hintText: 'Search movies', prefixIcon: Icon(Icons.search)),
+                  onChanged: (v) => ref.read(movieFilterProvider.notifier).setQuery(v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              languages.maybeWhen(
+                data: (langs) => DropdownButton<String?>(
+                  value: filter.language,
+                  hint: const Text('Language'),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('All langs')),
+                    for (final l in langs) DropdownMenuItem<String?>(value: l, child: Text(l)),
+                  ],
+                  onChanged: (l) => ref.read(movieFilterProvider.notifier).setLanguage(l),
+                ),
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ],
           ),
         ),
         SizedBox(
@@ -86,8 +107,8 @@ class _MovieCard extends StatelessWidget {
                   width: 64,
                   height: 92,
                   color: Colors.black26,
-                  child: movie.posterUrl != null
-                      ? Image.network(movie.posterUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie))
+                  child: resolveImageUrl(movie.posterUrl) != null
+                      ? Image.network(resolveImageUrl(movie.posterUrl)!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.movie))
                       : const Icon(Icons.movie),
                 ),
               ),

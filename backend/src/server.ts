@@ -1,6 +1,10 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { env } from './config/env.js';
 import { prisma } from './config/prisma.js';
 import { redis } from './config/redis.js';
@@ -41,8 +45,21 @@ app.setErrorHandler((error: Error, req, reply) => {
 
 await app.register(cors, { origin: true });
 await app.register(jwt, { secret: env.JWT_SECRET });
+await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024 } }); // 8MB poster cap
+
+// Serve uploaded posters at /uploads/<file>.
+const uploadsDir = join(process.cwd(), 'uploads');
+mkdirSync(uploadsDir, { recursive: true });
+await app.register(fastifyStatic, { root: uploadsDir, prefix: '/uploads/' });
 
 installTracing(app); // traceId + timing + activity log on every request
+
+app.get('/', async () => ({
+  service: 'CineBook API',
+  status: 'ok',
+  health: '/health',
+  endpoints: ['/auth', '/movies', '/theatres', '/shows', '/bookings', '/chat', '/metrics', '/admin'],
+}));
 
 app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 

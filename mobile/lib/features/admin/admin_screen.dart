@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api_client.dart';
+import '../../core/config.dart';
 import '../customer/catalog_repository.dart';
 import 'admin_repository.dart';
 
@@ -17,10 +19,22 @@ class AdminScreen extends ConsumerWidget {
         children: const [
           TabBar(
             isScrollable: true,
-            tabs: [Tab(text: 'Reports'), Tab(text: 'Users'), Tab(text: 'Catalog'), Tab(text: 'Activity')],
+            tabs: [
+              Tab(text: 'Reports'),
+              Tab(text: 'Users'),
+              Tab(text: 'Catalog'),
+              Tab(text: 'Activity'),
+            ],
           ),
           Expanded(
-            child: TabBarView(children: [_ReportsTab(), _UsersTab(), _CatalogTab(), _ActivityTab()]),
+            child: TabBarView(
+              children: [
+                _ReportsTab(),
+                _UsersTab(),
+                _CatalogTab(),
+                _ActivityTab(),
+              ],
+            ),
           ),
         ],
       ),
@@ -44,26 +58,35 @@ class _ReportsTab extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(children: [
-                _stat('Net revenue', '₹${d['netRevenue']}'),
-                _stat('Occupancy', '${d['occupancyRate']}%'),
-              ]),
+              Row(
+                children: [
+                  _stat('Net revenue', '₹${d['netRevenue']}'),
+                  _stat('Occupancy', '${d['occupancyRate']}%'),
+                ],
+              ),
               const SizedBox(height: 12),
-              Row(children: [
-                _stat('Confirmed', '${b['confirmed']}'),
-                _stat('Cancelled', '${b['cancelled']}'),
-                _stat('Pending', '${b['pending']}'),
-              ]),
+              Row(
+                children: [
+                  _stat('Confirmed', '${b['confirmed']}'),
+                  _stat('Cancelled', '${b['cancelled']}'),
+                  _stat('Pending', '${b['pending']}'),
+                ],
+              ),
               const SizedBox(height: 20),
-              Text('Top movies by revenue', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Top movies by revenue',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               if (top.isEmpty) const Text('No confirmed bookings yet'),
-              ...top.map((m) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('${m['title']}'),
-                    subtitle: Text('${m['bookings']} bookings'),
-                    trailing: Text('₹${m['revenue']}'),
-                  )),
+              ...top.map(
+                (m) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('${m['title']}'),
+                  subtitle: Text('${m['bookings']} bookings'),
+                  trailing: Text('₹${m['revenue']}'),
+                ),
+              ),
             ],
           ),
         );
@@ -72,20 +95,26 @@ class _ReportsTab extends ConsumerWidget {
   }
 
   Widget _stat(String label, String value) => Expanded(
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              ],
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
             ),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _UsersTab extends ConsumerWidget {
@@ -108,16 +137,24 @@ class _UsersTab extends ConsumerWidget {
                 value: u['role'] as String,
                 items: const [
                   DropdownMenuItem(value: 'customer', child: Text('customer')),
-                  DropdownMenuItem(value: 'hall_manager', child: Text('hall_manager')),
+                  DropdownMenuItem(
+                    value: 'hall_manager',
+                    child: Text('hall_manager'),
+                  ),
                   DropdownMenuItem(value: 'admin', child: Text('admin')),
                 ],
                 onChanged: (role) async {
                   if (role == null) return;
                   try {
-                    await ref.read(adminRepoProvider).updateRole(u['id'] as String, role);
+                    await ref
+                        .read(adminRepoProvider)
+                        .updateRole(u['id'] as String, role);
                     ref.invalidate(adminUsersProvider);
                   } catch (e) {
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+                    if (context.mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(apiErrorMessage(e))),
+                      );
                   }
                 },
               ),
@@ -146,10 +183,14 @@ class _CatalogTab extends ConsumerWidget {
         data: (list) => ListView(
           padding: const EdgeInsets.all(8),
           children: list
-              .map((m) => ListTile(
-                    title: Text(m.title),
-                    subtitle: Text('${m.language} · ${m.format} · ${m.ageRating} · ${m.genres.join(", ")}'),
-                  ))
+              .map(
+                (m) => ListTile(
+                  title: Text(m.title),
+                  subtitle: Text(
+                    '${m.language} · ${m.format} · ${m.ageRating} · ${m.genres.join(", ")}',
+                  ),
+                ),
+              )
               .toList(),
         ),
       ),
@@ -164,74 +205,176 @@ class _CatalogTab extends ConsumerWidget {
     final genres = TextEditingController(text: 'Drama');
     String age = 'UA';
     String format = 'TWO_D';
+    String? posterUrl;
+    bool uploading = false;
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Add movie'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: title, decoration: const InputDecoration(labelText: 'Title')),
-                TextField(controller: desc, decoration: const InputDecoration(labelText: 'Description')),
-                TextField(controller: runtime, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Runtime (min)')),
-                TextField(controller: language, decoration: const InputDecoration(labelText: 'Language')),
-                TextField(controller: genres, decoration: const InputDecoration(labelText: 'Genres (comma-separated)')),
-                Row(children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: age,
-                      decoration: const InputDecoration(labelText: 'Rating'),
-                      items: const [
-                        DropdownMenuItem(value: 'U', child: Text('U')),
-                        DropdownMenuItem(value: 'UA', child: Text('UA')),
-                        DropdownMenuItem(value: 'A', child: Text('A')),
-                      ],
-                      onChanged: (v) => setState(() => age = v!),
+        builder: (ctx, setState) {
+          Future<void> pickAndUpload() async {
+            final picked = await ImagePicker().pickImage(
+              source: ImageSource.gallery,
+              maxWidth: 800,
+              imageQuality: 80,
+            );
+            if (picked == null) return;
+            setState(() => uploading = true);
+            try {
+              final bytes = await picked.readAsBytes();
+              final url = await ref
+                  .read(adminRepoProvider)
+                  .uploadPoster(bytes, picked.name);
+              setState(() {
+                posterUrl = url;
+                uploading = false;
+              });
+            } catch (e) {
+              setState(() => uploading = false);
+              if (ctx.mounted)
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Add movie'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: uploading ? null : pickAndUpload,
+                    child: Container(
+                      height: 140,
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: uploading
+                          ? const Center(child: CircularProgressIndicator())
+                          : posterUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                resolveImageUrl(posterUrl)!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.broken_image),
+                              ),
+                            )
+                          : const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_photo_alternate, size: 36),
+                                SizedBox(height: 4),
+                                Text('Tap to add cover image'),
+                              ],
+                            ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: format,
-                      decoration: const InputDecoration(labelText: 'Format'),
-                      items: const [
-                        DropdownMenuItem(value: 'TWO_D', child: Text('2D')),
-                        DropdownMenuItem(value: 'THREE_D', child: Text('3D')),
-                      ],
-                      onChanged: (v) => setState(() => format = v!),
+                  TextField(
+                    controller: title,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  TextField(
+                    controller: desc,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  TextField(
+                    controller: runtime,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Runtime (min)',
                     ),
                   ),
-                ]),
-              ],
+                  TextField(
+                    controller: language,
+                    decoration: const InputDecoration(labelText: 'Language'),
+                  ),
+                  TextField(
+                    controller: genres,
+                    decoration: const InputDecoration(
+                      labelText: 'Genres (comma-separated)',
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: age,
+                          decoration: const InputDecoration(
+                            labelText: 'Rating',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'U', child: Text('U')),
+                            DropdownMenuItem(value: 'UA', child: Text('UA')),
+                            DropdownMenuItem(value: 'A', child: Text('A')),
+                          ],
+                          onChanged: (v) => setState(() => age = v!),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: format,
+                          decoration: const InputDecoration(
+                            labelText: 'Format',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'TWO_D', child: Text('2D')),
+                            DropdownMenuItem(
+                              value: 'THREE_D',
+                              child: Text('3D'),
+                            ),
+                          ],
+                          onChanged: (v) => setState(() => format = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () async {
-                try {
-                  await ref.read(adminRepoProvider).createMovie({
-                    'title': title.text.trim(),
-                    'description': desc.text.trim(),
-                    'runtimeMin': int.tryParse(runtime.text) ?? 120,
-                    'language': language.text.trim(),
-                    'ageRating': age,
-                    'format': format,
-                    'genres': genres.text.split(',').map((g) => g.trim()).where((g) => g.isNotEmpty).toList(),
-                  });
-                  ref.invalidate(moviesProvider);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                } catch (e) {
-                  if (ctx.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
-                }
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  try {
+                    await ref.read(adminRepoProvider).createMovie({
+                      'title': title.text.trim(),
+                      'description': desc.text.trim(),
+                      'runtimeMin': int.tryParse(runtime.text) ?? 120,
+                      'language': language.text.trim(),
+                      'ageRating': age,
+                      'format': format,
+                      'genres': genres.text
+                          .split(',')
+                          .map((g) => g.trim())
+                          .where((g) => g.isNotEmpty)
+                          .toList(),
+                      if (posterUrl != null) 'posterUrl': posterUrl,
+                    });
+                    ref.invalidate(moviesProvider);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  } catch (e) {
+                    if (ctx.mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(apiErrorMessage(e))),
+                      );
+                  }
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -254,12 +397,22 @@ class _ActivityTab extends ConsumerWidget {
           itemBuilder: (_, i) {
             final a = list[i];
             final ok = a['success'] == true;
-            final ts = a['createdAt'] != null ? DateFormat('d MMM h:mm:ss a').format(DateTime.parse(a['createdAt'] as String).toLocal()) : '';
+            final ts = a['createdAt'] != null
+                ? DateFormat(
+                    'd MMM h:mm:ss a',
+                  ).format(DateTime.parse(a['createdAt'] as String).toLocal())
+                : '';
             return ListTile(
               dense: true,
-              leading: Icon(ok ? Icons.check_circle : Icons.error, color: ok ? Colors.green : Colors.redAccent, size: 18),
+              leading: Icon(
+                ok ? Icons.check_circle : Icons.error,
+                color: ok ? Colors.green : Colors.redAccent,
+                size: 18,
+              ),
               title: Text('${a['action']}'),
-              subtitle: Text('${a['source']} · ${a['durationMs'] ?? '-'}ms · $ts'),
+              subtitle: Text(
+                '${a['source']} · ${a['durationMs'] ?? '-'}ms · $ts',
+              ),
             );
           },
         ),

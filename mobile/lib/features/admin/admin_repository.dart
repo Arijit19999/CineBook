@@ -25,6 +25,13 @@ class AdminRepository {
   }
 
   Future<void> createMovie(Map<String, dynamic> data) => _dio.post('/admin/movies', data: data);
+
+  /// Uploads poster image bytes; returns the relative URL (e.g. /uploads/x.jpg).
+  Future<String> uploadPoster(List<int> bytes, String filename) async {
+    final form = FormData.fromMap({'file': MultipartFile.fromBytes(bytes, filename: filename)});
+    final r = await _dio.post('/admin/upload', data: form);
+    return (r.data as Map<String, dynamic>)['url'] as String;
+  }
 }
 
 final adminRepoProvider = Provider((ref) => AdminRepository(ref.read(apiProvider)));

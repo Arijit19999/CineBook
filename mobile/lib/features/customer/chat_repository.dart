@@ -20,7 +20,13 @@ class ChatRepository {
     final resp = await _dio.post(
       '/chat',
       data: {'message': message, if (sessionId != null) 'sessionId': sessionId},
-      options: Options(responseType: ResponseType.stream, headers: {'Accept': 'text/event-stream'}),
+      // A full agentic booking can run many LLM calls + payment delay + provider
+      // backoff. Give the stream generous time between events (default is 60s).
+      options: Options(
+        responseType: ResponseType.stream,
+        headers: {'Accept': 'text/event-stream'},
+        receiveTimeout: const Duration(minutes: 5),
+      ),
     );
     final stream = (resp.data as ResponseBody).stream;
     var buffer = '';

@@ -77,6 +77,12 @@ export async function generate(opts: {
       await sleep(waitMs);
       continue;
     }
+    // Some models occasionally emit a malformed (text) tool call → Groq 400
+    // tool_use_failed. Retry; the next generation is usually well-formed.
+    if (res.status === 400 && errText.includes('tool_use_failed') && attempt < MAX_ATTEMPTS) {
+      await sleep(400);
+      continue;
+    }
     const err = new Error(`Groq ${res.status}: ${errText}`) as Error & { statusCode?: number };
     err.statusCode = res.status;
     throw err;

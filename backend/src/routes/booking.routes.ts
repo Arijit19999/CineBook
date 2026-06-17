@@ -8,7 +8,9 @@ import {
   getBooking,
   listBookings,
   cancelBooking,
+  applyPromoToBooking,
 } from '../services/booking.service.js';
+import { listPromos } from '../services/promo.service.js';
 import { startPayment, confirmPayment } from '../services/payment.service.js';
 import { authenticate } from '../middleware/auth.js';
 import { bookingLimiter } from '../middleware/rateLimit.js';
@@ -55,6 +57,16 @@ export async function bookingRoutes(app: FastifyInstance) {
   app.post('/:id/cancel', async (req) => {
     const { id } = req.params as { id: string };
     return cancelBooking(id, req.user.sub);
+  });
+
+  // Available promo codes (so the UI can show what's valid).
+  app.get('/promos', async () => ({ promos: listPromos() }));
+
+  app.post('/:id/promo', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ code: z.string().min(1) }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'ValidationError', details: body.error.flatten() });
+    return applyPromoToBooking(id, req.user.sub, body.data.code);
   });
 
   app.post('/:id/pay/start', async (req) => {

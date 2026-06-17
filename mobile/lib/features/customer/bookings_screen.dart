@@ -37,9 +37,31 @@ class BookingsScreen extends ConsumerWidget {
                       trailing: cancellable
                           ? TextButton(
                               onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Cancel booking?'),
+                                    content: Text(
+                                      '${b.movieTitle ?? 'This booking'} · ₹${b.totalCost}\n'
+                                      'Seats: ${b.seats.join(', ')}\n\n'
+                                      'This frees the seats${b.status == 'confirmed' ? ' and refunds your payment' : ''}.',
+                                    ),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+                                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancel booking')),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed != true) return;
                                 try {
-                                  await ref.read(catalogRepoProvider).cancelBooking(b.id);
+                                  final res = await ref.read(catalogRepoProvider).cancelBooking(b.id);
                                   ref.invalidate(myBookingsProvider);
+                                  if (context.mounted) {
+                                    final refunded = res['refunded'] == true;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(refunded ? 'Booking cancelled · refund issued' : 'Booking cancelled')),
+                                    );
+                                  }
                                 } catch (e) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
