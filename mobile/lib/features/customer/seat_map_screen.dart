@@ -68,31 +68,7 @@ class _SeatMapScreenState extends ConsumerState<SeatMapScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: rows.entries.map((e) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(width: 18, child: Text(e.key, style: const TextStyle(color: Colors.white54))),
-                            ...e.value.map((s) => GestureDetector(
-                                  onTap: s.status == 'booked' || s.status == 'held'
-                                      ? null
-                                      : () => setState(() => _selected.contains(s.id) ? _selected.remove(s.id) : _selected.add(s.id)),
-                                  child: Container(
-                                    width: 26,
-                                    height: 26,
-                                    margin: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(color: _color(s), borderRadius: BorderRadius.circular(5)),
-                                    child: Center(child: Text('${s.number}', style: const TextStyle(fontSize: 10))),
-                                  ),
-                                )),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                  child: Column(children: _rowsWithTiers(rows)),
                 ),
               ),
               _legend(),
@@ -112,6 +88,79 @@ class _SeatMapScreenState extends ConsumerState<SeatMapScreen> {
         },
       ),
     );
+  }
+
+  // Build the seat rows, inserting a tier header (category + price) whenever the
+  // category changes, so users can see the FrontRow / Standard / Premium / Recliner sections.
+  List<Widget> _rowsWithTiers(Map<String, List<SeatInfo>> rows) {
+    final widgets = <Widget>[];
+    String? lastCat;
+    for (final e in rows.entries) {
+      final seats = e.value;
+      final cat = seats.first.category;
+      if (cat != lastCat) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(width: 6, height: 6, margin: const EdgeInsets.only(right: 6), decoration: BoxDecoration(color: _tierColor(cat), shape: BoxShape.circle)),
+              Text('${_tierLabel(cat)} · ₹${seats.first.price}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1)),
+            ],
+          ),
+        ));
+        lastCat = cat;
+      }
+      widgets.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(width: 18, child: Text(e.key, style: const TextStyle(color: Colors.white54))),
+            ...seats.map((s) => GestureDetector(
+                  onTap: s.status == 'booked' || s.status == 'held'
+                      ? null
+                      : () => setState(() => _selected.contains(s.id) ? _selected.remove(s.id) : _selected.add(s.id)),
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    margin: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: _color(s), borderRadius: BorderRadius.circular(5)),
+                    child: Center(child: Text('${s.number}', style: const TextStyle(fontSize: 10))),
+                  ),
+                )),
+          ],
+        ),
+      ));
+    }
+    return widgets;
+  }
+
+  String _tierLabel(String c) {
+    switch (c) {
+      case 'FrontRow':
+        return 'FRONT ROW';
+      case 'Recliner':
+        return 'RECLINER';
+      default:
+        return c.toUpperCase();
+    }
+  }
+
+  Color _tierColor(String c) {
+    switch (c) {
+      case 'FrontRow':
+        return Colors.blueGrey;
+      case 'Standard':
+        return Colors.teal;
+      case 'Premium':
+        return Colors.amber;
+      case 'Recliner':
+        return Colors.purpleAccent;
+      default:
+        return Colors.white38;
+    }
   }
 
   Widget _legend() => Padding(
