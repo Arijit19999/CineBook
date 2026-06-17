@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import 'catalog_repository.dart';
 import 'chat_repository.dart';
 
 enum ItemKind { user, assistant, activity }
@@ -31,6 +32,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scroll.dispose();
     super.dispose();
   }
+
+  // Clean stray markup so assistant text renders nicely in a plain-text bubble.
+  String _clean(String s) => s
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll('**', '')
+      .replaceAll('__', '')
+      .trim();
 
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -63,7 +71,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               _items.add(ChatItem(ItemKind.activity, '⇒ delegating to booking assistant…'));
               break;
             case 'message':
-              _items.add(ChatItem(ItemKind.assistant, '${ev.data['text']}'));
+              _items.add(ChatItem(ItemKind.assistant, _clean('${ev.data['text']}')));
               break;
             case 'error':
               _items.add(ChatItem(ItemKind.assistant, '⚠️ ${ev.data['error']}'));
@@ -76,6 +84,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       setState(() => _items.add(ChatItem(ItemKind.assistant, '⚠️ ${apiErrorMessage(e)}')));
     } finally {
       if (mounted) setState(() => _streaming = false);
+      // The agent may have booked/held/cancelled — refresh those views so the
+      // Bookings tab and any seat maps reflect chat actions.
+      ref.invalidate(myBookingsProvider);
+      ref.invalidate(seatMapProvider);
       _scrollDown();
     }
   }

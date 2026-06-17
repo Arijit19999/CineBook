@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { createWriteStream } from 'node:fs';
+import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { requireRole } from '../middleware/auth.js';
 import { listUsers, updateUser, createMovie, createTheatre, listActivity, AdminError } from '../services/admin.service.js';
 import { reportSummary } from '../services/report.service.js';
@@ -43,6 +46,17 @@ export async function adminRoutes(app: FastifyInstance) {
       if (e instanceof AdminError) return reply.code(e.statusCode).send({ error: e.message });
       throw e;
     }
+  });
+
+  // Upload a poster image; returns a relative URL to store as posterUrl.
+  app.post('/upload', async (req, reply) => {
+    const file = await req.file();
+    if (!file) return reply.code(400).send({ error: 'No file uploaded' });
+    if (!file.mimetype.startsWith('image/')) return reply.code(400).send({ error: 'Only image files are allowed' });
+    const ext = (file.filename.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+    const name = `poster_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    await pipeline(file.file, createWriteStream(join(process.cwd(), 'uploads', name)));
+    return { url: `/uploads/${name}` };
   });
 
   app.post('/movies', async (req, reply) => {

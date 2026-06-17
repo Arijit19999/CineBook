@@ -25,6 +25,10 @@ export async function chatRoutes(app: FastifyInstance) {
     reply.hijack();
     const send = (event: string, data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
+    // Heartbeat (SSE comment, ignored by clients) so the connection never looks
+    // idle during long LLM calls / provider backoff.
+    const heartbeat = setInterval(() => reply.raw.write(': ping\n\n'), 10_000);
+
     send('session', { sessionId: session.id });
     try {
       await runOrchestrator(session, body.data.message, { userId: req.user.sub, session }, send);
@@ -32,6 +36,7 @@ export async function chatRoutes(app: FastifyInstance) {
     } catch (err) {
       send('error', { error: err instanceof Error ? err.message : 'Agent error' });
     } finally {
+      clearInterval(heartbeat);
       reply.raw.end();
     }
   });

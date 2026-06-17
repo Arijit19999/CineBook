@@ -53,16 +53,14 @@ export async function confirmPayment(bookingId: string, userId: string, cardNumb
   } catch (err) {
     if (err instanceof CircuitOpenError) throw err; // 503, booking left untouched
 
-    // Declined after retries → record the failure, cancel booking, free seats.
-    await prisma.$transaction([
-      prisma.payment.upsert({
-        where: { bookingId },
-        create: { bookingId, amount: booking.totalCost, status: 'failed' },
-        update: { status: 'failed', transactionId: null },
-      }),
-      prisma.bookedSeat.deleteMany({ where: { bookingId } }),
-      prisma.booking.update({ where: { id: bookingId }, data: { status: 'cancelled' } }),
-    ]);
+    // Declined → record the failed attempt but KEEP the booking pending and the
+    // seats held, so the user can retry with a different card. The booking is only
+    // released on explicit cancel or hold expiry.
+    await prisma.payment.upsert({
+      where: { bookingId },
+      create: { bookingId, amount: booking.totalCost, status: 'failed' },
+      update: { status: 'failed', transactionId: null },
+    });
     throw err instanceof PaymentError ? err : new PaymentError('Payment failed');
   }
 

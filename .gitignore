@@ -24,3 +24,6 @@ mobile/.packages
 Thumbs.db
 .idea/
 .vscode/
+
+# Uploaded files
+backend/uploads/

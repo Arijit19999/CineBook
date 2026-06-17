@@ -24,7 +24,9 @@ class AuthState {
         phone = null;
 }
 
-const _storage = FlutterSecureStorage();
+// resetOnError: if the Keystore-encrypted value can't be decrypted (e.g. after a
+// reinstall), return null and wipe it instead of throwing — avoids a startup hang.
+final _storage = const FlutterSecureStorage(aOptions: AndroidOptions(resetOnError: true));
 const _tokenKey = 'cinebook_jwt';
 
 class AuthNotifier extends Notifier<AuthState> {
@@ -33,9 +35,16 @@ class AuthNotifier extends Notifier<AuthState> {
 
   /// Load a persisted token on startup (call once from main).
   Future<void> restore() async {
-    final token = await _storage.read(key: _tokenKey);
-    if (token != null && !JwtDecoder.isExpired(token)) {
-      state = _fromToken(token);
+    try {
+      final token = await _storage.read(key: _tokenKey);
+      if (token != null && !JwtDecoder.isExpired(token)) {
+        state = _fromToken(token);
+      }
+    } catch (_) {
+      // Unreadable secure storage — start logged out and clear the bad value.
+      try {
+        await _storage.delete(key: _tokenKey);
+      } catch (_) {}
     }
   }
 

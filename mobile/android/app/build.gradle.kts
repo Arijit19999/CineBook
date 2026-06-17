@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "club.offlyn.cinebook"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.1.12297006" // pinned to the installed, valid NDK (flutter default 28.2 download was corrupted)
+    ndkVersion = "28.2.13676358" // required by the jni plugin; reinstalled clean
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

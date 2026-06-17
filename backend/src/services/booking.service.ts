@@ -153,9 +153,23 @@ export async function getBooking(id: string, userId: string) {
 export async function listBookings(userId: string) {
   return prisma.booking.findMany({
     where: { userId },
-    include: { show: { include: { movie: true } }, seats: true, payment: true },
+    include: { show: { include: { movie: true } }, seats: { include: { seat: true } }, payment: true },
     orderBy: { createdAt: 'desc' },
   });
+}
+
+// Apply a promo code to a still-pending booking, updating its total.
+export async function applyPromoToBooking(bookingId: string, userId: string, code: string) {
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { seats: true } });
+  if (!booking || booking.userId !== userId) throw new BookingError('Booking not found', 404);
+  if (booking.status !== 'pending') throw new BookingError(`Booking is ${booking.status}, cannot apply a promo`, 409);
+
+  const subtotal = booking.seats.reduce((sum, s) => sum + s.pricePaid, 0);
+  const promo = applyPromo(code, subtotal);
+  if (!promo.valid) throw new BookingError(promo.message, 400);
+
+  await prisma.booking.update({ where: { id: bookingId }, data: { totalCost: promo.finalAmount } });
+  return { bookingId, subtotal, discount: promo.discount, totalCost: promo.finalAmount, message: promo.message };
 }
 
 // Cancel a booking, freeing its seats. Refunds the payment if one succeeded.

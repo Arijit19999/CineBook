@@ -8,8 +8,11 @@ import 'core/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
-  // Restore a persisted session before the first frame.
-  await container.read(authProvider.notifier).restore();
+  // Restore a persisted session before the first frame — but never let a slow or
+  // failing secure-storage read block app startup.
+  try {
+    await container.read(authProvider.notifier).restore().timeout(const Duration(seconds: 3));
+  } catch (_) {}
   runApp(UncontrolledProviderScope(container: container, child: const CineBookApp()));
 }
 
