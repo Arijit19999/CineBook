@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/auth/auth.dart';
 import '../../shared/models/models.dart';
 
 class CatalogRepository {
@@ -117,4 +118,9 @@ final seatMapProvider = FutureProvider.family<SeatMap, String>(
   (ref, showId) => ref.read(catalogRepoProvider).getSeatMap(showId),
 );
 
-final myBookingsProvider = FutureProvider<List<Booking>>((ref) => ref.read(catalogRepoProvider).myBookings());
+final myBookingsProvider = FutureProvider<List<Booking>>((ref) {
+  // Re-fetch when the logged-in user changes, so one user never sees another's
+  // cached bookings after a logout/login.
+  ref.watch(authProvider.select((a) => a.userId));
+  return ref.read(catalogRepoProvider).myBookings();
+});
