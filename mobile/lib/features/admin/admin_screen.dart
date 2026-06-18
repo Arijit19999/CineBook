@@ -166,34 +166,126 @@ class _UsersTab extends ConsumerWidget {
   }
 }
 
-class _CatalogTab extends ConsumerWidget {
+class _CatalogTab extends ConsumerStatefulWidget {
   const _CatalogTab();
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final movies = ref.watch(moviesProvider);
+  ConsumerState<_CatalogTab> createState() => _CatalogTabState();
+}
+
+class _CatalogTabState extends ConsumerState<_CatalogTab> {
+  int _seg = 0; // 0 = Movies, 1 = Cinemas, 2 = Showtimes
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addMovieDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Movie'),
+      floatingActionButton: _seg == 0
+          ? FloatingActionButton.extended(
+              onPressed: () => _addMovieDialog(context, ref),
+              icon: const Icon(Icons.add),
+              label: const Text('Movie'),
+            )
+          : null,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('Movies')),
+                ButtonSegment(value: 1, label: Text('Cinemas')),
+                ButtonSegment(value: 2, label: Text('Showtimes')),
+              ],
+              selected: {_seg},
+              onSelectionChanged: (s) => setState(() => _seg = s.first),
+            ),
+          ),
+          Expanded(child: _body()),
+        ],
       ),
-      body: movies.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(apiErrorMessage(e))),
-        data: (list) => ListView(
+    );
+  }
+
+  Widget _body() {
+    if (_seg == 1) return _cinemas();
+    if (_seg == 2) return _showtimes();
+    return _movies();
+  }
+
+  Widget _movies() {
+    final movies = ref.watch(moviesProvider);
+    return movies.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(apiErrorMessage(e))),
+      data: (list) => RefreshIndicator(
+        onRefresh: () async => ref.refresh(moviesProvider.future),
+        child: ListView(
           padding: const EdgeInsets.all(8),
           children: list
-              .map(
-                (m) => ListTile(
-                  title: Text(m.title),
-                  subtitle: Text(
-                    '${m.language} · ${m.format} · ${m.ageRating} · ${m.genres.join(", ")}',
-                  ),
-                ),
-              )
+              .map((m) => ListTile(
+                    title: Text(m.title),
+                    subtitle: Text('${m.language} · ${m.format} · ${m.ageRating} · ${m.genres.join(", ")}'),
+                  ))
               .toList(),
         ),
       ),
+    );
+  }
+
+  Widget _cinemas() {
+    final t = ref.watch(adminTheatresProvider);
+    return t.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(apiErrorMessage(e))),
+      data: (list) => RefreshIndicator(
+        onRefresh: () async => ref.refresh(adminTheatresProvider.future),
+        child: ListView(
+          padding: const EdgeInsets.all(8),
+          children: list.map((th) {
+            final screens = (th['screens'] as List?) ?? const [];
+            final types = screens.map((s) => '${(s as Map)['screenType']}').join(', ');
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.location_city),
+                title: Text('${th['chain']} · ${th['location']}'),
+                subtitle: Text('${th['address']}\n${screens.length} screen(s): $types'),
+                isThreeLine: true,
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _showtimes() {
+    final sh = ref.watch(adminShowsProvider);
+    return sh.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(apiErrorMessage(e))),
+      data: (list) => list.isEmpty
+          ? const Center(child: Text('No showtimes scheduled yet'))
+          : RefreshIndicator(
+              onRefresh: () async => ref.refresh(adminShowsProvider.future),
+              child: ListView(
+                padding: const EdgeInsets.all(8),
+                children: list.map((s) {
+                  final movie = (s['movie'] as Map?)?['title'] ?? 'Movie';
+                  final screen = s['screen'] as Map?;
+                  final theatre = screen?['theatre'] as Map?;
+                  final when = s['startTime'] != null
+                      ? DateFormat('EEE d MMM, h:mm a').format(DateTime.parse(s['startTime'] as String).toLocal())
+                      : '';
+                  return ListTile(
+                    leading: const Icon(Icons.schedule),
+                    title: Text('$movie'),
+                    subtitle: Text(
+                      '${theatre?['chain'] ?? ''}, ${theatre?['location'] ?? ''} · ${screen?['screenType'] ?? ''}\n$when · ₹${s['basePrice']}',
+                    ),
+                    isThreeLine: true,
+                  );
+                }).toList(),
+              ),
+            ),
     );
   }
 

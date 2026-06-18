@@ -32,10 +32,16 @@ export async function reportSummary() {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5);
 
+  const successSum = revenue._sum.amount ?? 0; // payments still held (refunds already excluded)
+  const refundedSum = refunds._sum.amount ?? 0;
   return {
-    revenue: revenue._sum.amount ?? 0,
-    refunded: refunds._sum.amount ?? 0,
-    netRevenue: (revenue._sum.amount ?? 0) - (refunds._sum.amount ?? 0),
+    // Gross = everything ever successfully charged (incl. amounts later refunded).
+    grossRevenue: successSum + refundedSum,
+    refunded: refundedSum,
+    // Net = money actually kept. 'success' already excludes refunded payments, so
+    // net IS the success sum — do NOT subtract refunds again (that double-counted).
+    netRevenue: successSum,
+    revenue: successSum,
     bookings: { confirmed, cancelled, pending },
     seatsBooked,
     totalCapacity,

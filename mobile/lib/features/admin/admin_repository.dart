@@ -26,6 +26,17 @@ class AdminRepository {
 
   Future<void> createMovie(Map<String, dynamic> data) => _dio.post('/admin/movies', data: data);
 
+  // Read-only catalog data for the admin: all cinemas and all showtimes.
+  Future<List<Map<String, dynamic>>> theatres() async {
+    final r = await _dio.get('/theatres');
+    return (r.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> shows() async {
+    final r = await _dio.get('/shows');
+    return (r.data as List).cast<Map<String, dynamic>>();
+  }
+
   /// Uploads poster image bytes; returns the relative URL (e.g. /uploads/x.jpg).
   Future<String> uploadPoster(List<int> bytes, String filename) async {
     final form = FormData.fromMap({'file': MultipartFile.fromBytes(bytes, filename: filename)});
@@ -38,3 +49,5 @@ final adminRepoProvider = Provider((ref) => AdminRepository(ref.read(apiProvider
 final adminUsersProvider = FutureProvider((ref) => ref.read(adminRepoProvider).users());
 final adminReportsProvider = FutureProvider((ref) => ref.read(adminRepoProvider).reports());
 final adminActivityProvider = FutureProvider((ref) => ref.read(adminRepoProvider).activity());
+final adminTheatresProvider = FutureProvider((ref) => ref.read(adminRepoProvider).theatres());
+final adminShowsProvider = FutureProvider((ref) => ref.read(adminRepoProvider).shows());
