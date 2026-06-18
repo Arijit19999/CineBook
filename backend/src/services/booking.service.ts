@@ -13,27 +13,6 @@ export class BookingError extends Error {
 const HOLD_TTL = 300; // seconds — matches the SeatHold TTL in the plan
 const holdKey = (showId: string, seatId: string) => `hold:${showId}:${seatId}`;
 
-// Acquire all holds atomically: if ANY key is held by another user, abort and
-// touch nothing; otherwise set them all. Returns 'OK' or the conflicting key.
-// Re-holding your own seats is allowed (refreshes TTL) → idempotent.
-const ACQUIRE_LUA = `
-for i=1,#KEYS do
-  local v = redis.call('get', KEYS[i])
-  if v and v ~= ARGV[1] then return KEYS[i] end
-end
-for i=1,#KEYS do redis.call('set', KEYS[i], ARGV[1], 'EX', ARGV[2]) end
-return 'OK'`;
-
-// Release only the holds this user owns.
-const RELEASE_LUA = `
-local released = 0
-for i=1,#KEYS do
-  if redis.call('get', KEYS[i]) == ARGV[1] then
-    released = released + redis.call('del', KEYS[i])
-  end
-end
-return released`;
-
 export type SeatStatus = 'available' | 'held' | 'held_by_you' | 'booked';
 
 export async function checkAvailability(showId: string, userId?: string) {
@@ -73,12 +52,28 @@ async function validateSeats(showId: string, seatIds: string[]) {
   return { show, seats };
 }
 
+// Hold seats with plain SET NX EX (Upstash blocks Lua EVAL). First writer wins
+// per seat; re-holding your own seat refreshes its TTL. On a conflict we roll back
+// the holds we just set, so a partial failure leaves nothing dangling. The DB
+// unique(showId, seatId) on BookedSeat remains the final anti-double-book backstop.
 export async function holdSeats(showId: string, seatIds: string[], userId: string) {
   await validateSeats(showId, seatIds);
-  const keys = seatIds.map((id) => holdKey(showId, id));
-  const res = (await redis.eval(ACQUIRE_LUA, keys.length, ...keys, userId, String(HOLD_TTL))) as string;
-  if (res !== 'OK') {
-    const seatId = res.split(':').pop();
+  const newlySet: string[] = [];
+  for (const seatId of seatIds) {
+    const key = holdKey(showId, seatId);
+    const ok = await redis.set(key, userId, 'EX', HOLD_TTL, 'NX');
+    if (ok === 'OK') {
+      newlySet.push(key);
+      continue;
+    }
+    // Key already exists — allowed only if THIS user holds it (refresh TTL).
+    const owner = await redis.get(key);
+    if (owner === userId) {
+      await redis.expire(key, HOLD_TTL);
+      continue;
+    }
+    // Held by someone else → undo the holds we set in this call, then fail.
+    if (newlySet.length) await redis.del(...newlySet);
     throw new BookingError(`Seat ${seatId} is currently held by someone else`, 409);
   }
   return { showId, held: seatIds, expiresInSec: HOLD_TTL };
@@ -86,8 +81,12 @@ export async function holdSeats(showId: string, seatIds: string[], userId: strin
 
 export async function releaseSeats(showId: string, seatIds: string[], userId: string) {
   if (!seatIds.length) return { released: 0 };
-  const keys = seatIds.map((id) => holdKey(showId, id));
-  const released = (await redis.eval(RELEASE_LUA, keys.length, ...keys, userId)) as number;
+  let released = 0;
+  for (const seatId of seatIds) {
+    const key = holdKey(showId, seatId);
+    const owner = await redis.get(key);
+    if (owner === userId) released += await redis.del(key);
+  }
   return { released };
 }
 
