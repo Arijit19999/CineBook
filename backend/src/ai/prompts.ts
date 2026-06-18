@@ -20,7 +20,8 @@ HOW YOU WORK:
 - Use the provided tools to get real data. Never invent movies, showtimes, seats, prices, dates, or booking IDs.
 - Do NOT pass a 'date' filter to get_showtimes unless the user names a specific date. Omit it to see all upcoming shows, then pick one that matches their preference (e.g. an evening time).
 - Chain tools together: e.g. search a movie → get its showtimes → check seats. Feed each result into the next step.
-- To actually BOOK tickets (hold seats → create booking → apply promo → pay), call delegate_to_booking_assistant with a clear goal describing what the user wants. A focused booking sub-agent will complete the transaction and report back.
+- To actually BOOK tickets, call delegate_to_booking_assistant ONCE with a clear goal (movie, date/time, party size, seat tier, promo, card). For a booking request, delegate immediately — you do NOT need to search or check showtimes yourself first; the sub-agent does all of that.
+- CRITICAL: After delegate_to_booking_assistant returns, do NOT call it again and do NOT search/check again. Read its summary and reply with ONE short confirmation (movie, showtime, seats, total, payment status, booking ID), then STOP. Book at most once per request.
 - You can answer informational questions (theatres, seat availability, booking status/history, recommendations) directly with your own tools.
 - Remember the user's stated preferences (genre, area, time, party size, seat type). They are kept in SESSION STATE below.
 - Be concise and friendly. Confirm important actions and surface prices and booking confirmations clearly.
@@ -49,10 +50,12 @@ Complete the booking end-to-end using your tools, in this typical order:
 5. create_booking (pass the promo code if one was applied).
 6. start_payment then confirm_payment. Use the user's card if given; otherwise use the test card 4111111111111111.
 
-RULES:
+RULES (follow strictly — do not loop):
 - Use only real data returned by tools. Use seat IDs returned by check_seat_availability when holding seats.
-- If a step fails, adapt (pick other seats, report the problem) — don't loop forever.
-- When done (or blocked), STOP calling tools and return a short structured summary: what was booked, seats, total, payment status, and the booking ID — or what went wrong.
+- Call get_showtimes only ONCE. If the user's exact date/time isn't available, pick the CLOSEST upcoming show and proceed — note the actual showtime in your summary. Never re-search the same thing.
+- Make exactly ONE booking. The moment confirm_payment succeeds, STOP IMMEDIATELY — do NOT release seats, do NOT re-check availability, do NOT create another booking.
+- If a step genuinely fails, adapt once (e.g. pick other seats) or stop and report — never retry in a loop.
+- When done (or blocked), STOP calling tools and return a short summary: movie, showtime, seats, total, payment status, booking ID — or what went wrong.
 
 ${stateBlock(state)}`;
 }

@@ -23,6 +23,7 @@ export async function runOrchestrator(session: Session, userMsg: string, ctx: To
   await maybeCompact(session);
 
   const tools = [...schemasFor(ORCHESTRATOR_TOOLS), delegateSchema];
+  let delegated = false; // hard cap: one booking delegation per request
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const system = buildOrchestratorSystem(session.state);
@@ -44,11 +45,20 @@ export async function runOrchestrator(session: Session, userMsg: string, ctx: To
       emit?.('tool', { name: call.name, args: call.args });
       let response: unknown;
       if (call.name === DELEGATE) {
-        const goal = String(call.args.goal ?? userMsg);
-        emit?.('delegate', { goal });
-        const summary = await runBookingAgent(goal, ctx, emit);
-        response = { summary };
-        emit?.('delegate_done', { summary });
+        if (delegated) {
+          // Already delegated once this turn — refuse a second booking and tell
+          // the model to summarize and stop (guards a weak model from looping).
+          response = {
+            note: 'A booking was already attempted this turn. Do NOT book again. Summarize the result of the previous booking for the user and stop.',
+          };
+        } else {
+          delegated = true;
+          const goal = String(call.args.goal ?? userMsg);
+          emit?.('delegate', { goal });
+          const summary = await runBookingAgent(goal, ctx, emit);
+          response = { summary };
+          emit?.('delegate_done', { summary });
+        }
       } else {
         response = await dispatch(call.name, call.args, ctx);
       }
