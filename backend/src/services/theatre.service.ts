@@ -22,12 +22,16 @@ export async function getTheatre(id: string) {
 }
 
 // Full screen detail incl. its physical seat map (used by the seat-map UI + AI tools).
+// Exposes `type` (alias of screenType) and a display `name` so clients don't see null.
 export async function getScreen(id: string) {
-  return prisma.screen.findUnique({
+  const screen = await prisma.screen.findUnique({
     where: { id },
     include: {
       theatre: true,
       seats: { orderBy: [{ row: 'asc' }, { number: 'asc' }] },
     },
   });
+  if (!screen) return null;
+  const typeLabel = screen.screenType === 'FourDX' ? '4DX' : screen.screenType;
+  return { ...screen, type: typeLabel, name: `${typeLabel} Screen` };
 }
